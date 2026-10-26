@@ -1,75 +1,124 @@
 // Offline service worker for My Shelf.
-// - App files: cached so the shelf opens offline.
-// - Book covers (covers.openlibrary.org): cached the first time they're shown,
-// so they stay visible offline. Everything else goes straight to the network.
+// App files are cached for offline use.
+// Book covers are cached after first load.
 
-const CACHE = "myshelf-v3";
+const CACHE = "myshelf-v4";
 const COVERS = "myshelf-covers-v1";
+
 const ASSETS = [
- "./",
- "./index.html",
- "./manifest.webmanifest",
- "./icons/icon-192.png",
- "./icons/icon-512.png",
- "./icons/maskable-512.png",
- "./icons/apple-touch-icon.png",
- "./icons/favicon-32.png"
+  "./",
+  "./index.html",
+  "./manifest.webmanifest",
+  "./icons/icon-192.png",
+  "./icons/icon-512.png",
+  "./icons/maskable-512.png",
+  "./icons/apple-touch-icon.png",
+  "./icons/favicon-32.png"
 ];
 
 self.addEventListener("install", (event) => {
- event.waitUntil(
- caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting())
- );
+  event.waitUntil(
+    caches.open(CACHE)
+      .then((cache) => cache.addAll(ASSETS))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener("activate", (event) => {
- event.waitUntil(
- caches.keys()
- .then((keys) => Promise.all(
- keys.filter((k) => k !== CACHE && k !== COVERS).map((k) => caches.delete(k))
- ))
- .then(() => self.clients.claim())
- );
+  event.waitUntil(
+    caches.keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) =>
+              key.startsWith("myshelf-") &&
+              key !== CACHE &&
+              key !== COVERS
+            )
+            .map((key) => caches.delete(key))
+        )
+      )
+      .then(() => self.clients.claim())
+  );
 });
 
 self.addEventListener("fetch", (event) => {
- const req = event.request;
- if (req.method !== "GET") return;
- const url = new URL(req.url);
+  const req = event.request;
 
- // Book covers: cache-first, so a cover you've seen once shows offline too.
- if (url.hostname === "covers.openlibrary.org" ||
- url.hostname === "books.google.com" ||
- url.hostname === "books.googleusercontent.com") {
- event.respondWith(
- caches.open(COVERS).then((cache) =>
- cache.match(req).then((hit) => {
- if (hit) return hit;
- return fetch(req).then((resp) => {
- cache.put(req, resp.clone()).catch(() => {});
- return resp;
- });
- // Offline and not cached -> fetch rejects -> the <img> shows our placeholder.
- })
- )
- );
- return;
- }
+  if (req.method !== "GET") return;
 
- // Our own files: cache-first (app shell / offline).
- if (url.origin === self.location.origin) {
- event.respondWith(
- caches.match(req).then((cached) =>
- cached ||
- fetch(req).then((resp) => {
- const copy = resp.clone();
- caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
- return resp;
- }).catch(() => caches.match("./index.html"))
- )
- );
- return;
- }
+  const url = new URL(req.url);
 
- // Everything else (CDN script, Open Library API): network as usual.
+  // Cache book covers for offline use.
+  const isCover =
+    url.hostname === "covers.openlibrary.org" ||
+    url.hostname === "books.google.com" ||
+    url.hostname === "books.googleusercontent.com" ||
+    url.hostname === "archive.org" ||
+    url.hostname.endsWith(".archive.org");
+
+  if (isCover) {
+    event.respondWith(
+      caches.open(COVERS).then(async (cache) => {
+        const cached = await cache.match(req);
+        if (cached) return cached;
+
+        try {
+          const response = await fetch(req);
+
+          if (response.ok || response.type === "opaque") {
+            cache.put(req, response.clone()).catch(() => {});
+          }
+
+          return response;
+        } catch (error) {
+          return new Response("", {
+            status: 504,
+            statusText: "Cover unavailable offline"
+          });
+        }
+      })
+    );
+    return;
+  }
+
+  // Keep API requests online so ISBN lookups can receive fresh data.
+  if (url.origin !== self.location.origin) return;
+
+  // For HTML, prefer the network so deployed updates are picked up.
+  if (req.mode === "navigate" || url.pathname.endsWith("/index.html")) {
+    event.respondWith(
+      fetch(req)
+        .then((response) => {
+          if (response.ok) {
+            caches.open(CACHE)
+              .then((cache) => cache.put("./index.html", response.clone()))
+              .catch(() => {});
+          }
+          return response;
+        })
+        .catch(() =>
+          caches.match(req).then(
+            (cached) => cached || caches.match("./index.html")
+          )
+        )
+    );
+    return;
+  }
+
+  // Cache-first for the remaining app assets.
+  event.respondWith(
+    caches.match(req).then((cached) => {
+      if (cached) return cached;
+
+      return fetch(req).then((response) => {
+        if (response.ok) {
+          caches.open(CACHE)
+            .then((cache) => cache.put(req, response.clone()))
+            .catch(() => {});
+        }
+        return response;
+      });
+    })
+  );
 });
