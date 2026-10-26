@@ -643,7 +643,7 @@ function addBook(b){
  confirmEl.style.display = "block";
  }
 
- async function handleIsbn(raw){
+ async function handleIsbn(raw, autoAddOnScan){
  var isbn = cleanIsbn(raw);
  if (isbn.length < 10){ toast("That doesn't look like a book barcode"); return; }
  if (shelf.some(function(x){ return x.isbn===isbn; })){ toast("Already on your shelf"); return; }
@@ -658,6 +658,18 @@ function addBook(b){
    $("cTitle").onclick = function(){ var inp=$("isbnInput"); inp.value=""; inp.focus(); inp.scrollIntoView({behavior:"smooth",block:"center"}); };
    $("cManual").onclick = function(){ editBook({isbn:isbn,title:"",authors:[],publisher:"",publicationDate:"",year:"",cover:"",status:"want",addedAt:Date.now()}, true); };
    confirmEl.style.display = "block";
+   return;
+ }
+ if (autoAddOnScan) {
+   // A successful barcode scan should add the matched book immediately.
+   // Keep a review/edit card visible so the user can correct metadata if needed.
+   addBook(book);
+   showConfirm(book);
+   var addButton = $("cAdd");
+   if (addButton) { addButton.textContent = "Already added"; addButton.disabled = true; }
+   var againButton = $("cAgain");
+   if (againButton) againButton.textContent = "Scan another";
+   toast("Scanned and added “" + book.title + "”");
    return;
  }
  showConfirm(book);
@@ -788,7 +800,7 @@ function editBook(book, mountInConfirm){
  function onSuccess(text){
  if (busy) return; busy = true;
  if (navigator.vibrate) navigator.vibrate(60);
- stopScan().then(function(){ handleIsbn(text); });
+ stopScan().then(function(){ handleIsbn(text, true); });
  }
  function onError(){ /* per-frame decode misses — ignore */ }
 
