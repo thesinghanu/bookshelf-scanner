@@ -1,556 +1,587 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>My Shelf — Book Scanner</title>
-<meta name="description" content="Scan a book's barcode and build your reading shelf. Works offline, no account." />
+<meta name="description" content="Scan a book's barcode and build your reading shelf. Works offline, no account.">
+<meta name="theme-color" content="#17140f">
 
-<!-- PWA -->
-<link rel="manifest" href="manifest.webmanifest" />
-<meta name="theme-color" content="#8c2f39" media="(prefers-color-scheme: light)" />
-<meta name="theme-color" content="#17140f" media="(prefers-color-scheme: dark)" />
-
-<!-- iOS home-screen app -->
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="My Shelf" />
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-<link rel="icon" href="icons/favicon-32.png" sizes="32x32" />
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32">
 
 <style>
- :root{
- --bg:#fbf7ef; --surface:#ffffff; --card:#fffdf8; --ink:#241f1b; --muted:#6b655c;
- --accent:#8c2f39; --accent-soft:#f3e3e4; --accent-ink:#ffffff; --line:#e7e0d3; --chip:#f0ece2;
- --want:#9a6a1e; --reading:#2663ae; --read:#2e7d5b; --shadow:rgba(60,40,20,.10);
- }
- @media (prefers-color-scheme: dark){
- :root{
- --bg:#17140f; --surface:#201c16; --card:#221e18; --ink:#efe9df; --muted:#a79f92;
- --accent:#d8707a; --accent-soft:#36262a; --accent-ink:#1a1512; --line:#342e26; --chip:#2a251e;
- --want:#d6a24a; --reading:#6ea6e6; --read:#6bbf92; --shadow:rgba(0,0,0,.4);
- }
- }
- *{box-sizing:border-box}
- html,body{margin:0}
- body{
- font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
- background:var(--bg); color:var(--ink); line-height:1.5;
- -webkit-font-smoothing:antialiased; padding-bottom:40px;
- }
- .wrap{max-width:560px; margin:0 auto; padding:0 16px}
-
- /* Header */
- header{
- padding:calc(env(safe-area-inset-top) + 20px) 0 10px;
- text-align:center;
- }
- .logo{width:40px;height:40px;display:inline-block;vertical-align:middle;margin-bottom:6px}
- h1{font-family:Georgia,"Times New Roman",serif; font-weight:600; font-size:28px; margin:0; letter-spacing:.2px}
- .tagline{color:var(--muted); font-size:13.5px; margin-top:2px}
-
- /* Buttons */
- .btn{
- appearance:none; border:none; border-radius:14px; cursor:pointer;
- font-size:16px; font-weight:600; padding:14px 18px; width:100%;
- display:flex; align-items:center; justify-content:center; gap:10px;
- transition:transform .05s ease, filter .15s ease;
- }
- .btn:active{transform:scale(.985)}
- .btn-primary{background:var(--accent); color:var(--accent-ink); box-shadow:0 6px 18px var(--shadow)}
- .btn-ghost{background:var(--chip); color:var(--ink)}
- .btn-sm{width:auto; padding:9px 14px; font-size:14px; border-radius:11px}
- .scan-icon{width:22px;height:22px}
-
- .toolbar{display:flex; gap:10px; margin-top:12px}
- .toolbar .btn{flex:1}
-
- /* Manual add */
- .manual{display:flex; gap:8px; margin-top:12px}
- .manual input{
- flex:1; font-size:16px; padding:12px 14px; border-radius:12px;
- border:1px solid var(--line); background:var(--surface); color:var(--ink);
- }
- .manual input:focus{outline:2px solid var(--accent); outline-offset:0; border-color:transparent}
-
- /* Scanner */
- #scanner{display:none; margin-top:16px}
- #reader{width:100%; border-radius:16px; overflow:hidden; background:#000; border:1px solid var(--line)}
- #reader video{display:block; width:100% !important; height:auto !important}
- .scan-hint{color:var(--muted); font-size:13px; text-align:center; margin:10px 0 2px}
-
- /* Confirm card */
- #confirm{display:none; margin-top:16px}
- .confirm-card{
- display:flex; gap:14px; background:var(--card); border:1px solid var(--line);
- border-radius:16px; padding:14px; box-shadow:0 4px 14px var(--shadow);
- }
- .cover{width:72px; height:106px; border-radius:8px; object-fit:cover; background:var(--accent-soft); flex:none}
- .cover.ph{display:flex;align-items:center;justify-content:center;color:var(--accent);font-family:Georgia,serif;font-size:26px;font-weight:600}
- .ctitle{font-family:Georgia,serif; font-size:18px; font-weight:600; margin:2px 0 2px}
- .cauthor{color:var(--muted); font-size:14px}
- .cyear{color:var(--muted); font-size:12.5px; margin-top:2px}
- .confirm-actions{display:flex; gap:10px; margin-top:12px}
- .confirm-actions .btn{flex:1}
-
- /* Shelf */
- .shelf-head{display:flex; align-items:baseline; justify-content:space-between; margin:24px 0 10px}
- .shelf-head h2{font-family:Georgia,serif; font-size:20px; margin:0; font-weight:600}
- .count{color:var(--muted); font-size:13px}
- .filters{display:flex; gap:7px; overflow-x:auto; padding-bottom:4px; margin-bottom:6px; -webkit-overflow-scrolling:touch}
- .filter{
- flex:none; border:1px solid var(--line); background:var(--surface); color:var(--muted);
- font-size:13px; padding:6px 12px; border-radius:20px; cursor:pointer; white-space:nowrap;
- }
- .filter.active{background:var(--accent); color:var(--accent-ink); border-color:transparent}
-
- .book{
- display:flex; gap:12px; align-items:center; padding:10px; margin-bottom:10px;
- background:var(--card); border:1px solid var(--line); border-radius:14px;
- }
- .book .cover{width:46px; height:68px; font-size:18px}
- .book .info{flex:1; min-width:0}
- .book .bt{font-family:Georgia,serif; font-size:15.5px; font-weight:600; margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
- .book .ba{color:var(--muted); font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
- .status{
- display:inline-block; margin-top:5px; font-size:11.5px; font-weight:600; padding:3px 9px;
- border-radius:20px; cursor:pointer; border:1px solid currentColor; background:transparent;
- }
- .status.want{color:var(--want)} .status.reading{color:var(--reading)} .status.read{color:var(--read)}
- .remove{
- flex:none; width:30px; height:30px; border-radius:50%; border:none; cursor:pointer;
- background:transparent; color:var(--muted); font-size:18px; line-height:1;
- }
- .remove:active{background:var(--chip)}
-
- .empty{text-align:center; color:var(--muted); padding:34px 10px}
- .empty svg{width:54px;height:54px;opacity:.5;margin-bottom:8px}
-
- /* Install hint */
- .hint{
- display:none; background:var(--accent-soft); color:var(--ink); border:1px solid var(--line);
- border-radius:12px; padding:11px 14px; font-size:13.5px; margin-top:14px; position:relative;
- }
- .hint b{font-weight:600}
- .hint .x{position:absolute; right:8px; top:6px; background:none; border:none; color:var(--muted); font-size:18px; cursor:pointer}
-
- /* Toast */
- #toast{
- position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(20px);
- background:var(--ink); color:var(--bg); padding:11px 18px; border-radius:24px; font-size:14px;
- opacity:0; pointer-events:none; transition:all .25s ease; max-width:90%; text-align:center; z-index:50;
- }
- #toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
-
- footer{text-align:center; color:var(--muted); font-size:12px; margin-top:30px}
- footer a{color:var(--accent)}
- .spinner{width:18px;height:18px;border:2.5px solid var(--accent-soft);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;display:inline-block;vertical-align:middle}
- @keyframes spin{to{transform:rotate(360deg)}}
+:root {
+  --bg:#fbf7ef; --surface:#fff; --card:#fffdf8; --ink:#241f1b;
+  --muted:#6b655c; --accent:#8c2f39; --accent-soft:#f3e3e4;
+  --accent-ink:#fff; --line:#e7e0d3; --chip:#f0ece2;
+  --want:#9a6a1e; --reading:#2663ae; --read:#2e7d5b;
+  --shadow:rgba(60,40,20,.10);
+}
+@media(prefers-color-scheme:dark) {
+  :root {
+    --bg:#17140f; --surface:#201c16; --card:#221e18; --ink:#efe9df;
+    --muted:#a79f92; --accent:#d8707a; --accent-soft:#36262a;
+    --accent-ink:#1a1512; --line:#342e26; --chip:#2a251e;
+    --want:#d6a24a; --reading:#6ea6e6; --read:#6bbf92;
+    --shadow:rgba(0,0,0,.4);
+  }
+}
+* {box-sizing:border-box}
+html,body {margin:0}
+body {
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  background:var(--bg);color:var(--ink);line-height:1.5;
+  -webkit-font-smoothing:antialiased;padding-bottom:40px;
+}
+.wrap {max-width:560px;margin:0 auto;padding:0 16px}
+header {padding:calc(env(safe-area-inset-top) + 20px) 0 10px;text-align:center}
+.logo {width:40px;height:40px;display:inline-block;vertical-align:middle;margin-bottom:6px}
+h1 {font-family:Georgia,"Times New Roman",serif;font-weight:600;font-size:28px;margin:0}
+.tagline {color:var(--muted);font-size:13.5px;margin-top:2px}
+.btn {
+  appearance:none;border:0;border-radius:14px;cursor:pointer;
+  font-size:16px;font-weight:600;padding:14px 18px;width:100%;
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  transition:transform .05s ease,filter .15s ease;
+}
+.btn:active {transform:scale(.985)}
+.btn-primary {background:var(--accent);color:var(--accent-ink);box-shadow:0 6px 18px var(--shadow)}
+.btn-ghost {background:var(--chip);color:var(--ink)}
+.btn-sm {width:auto;padding:9px 14px;font-size:14px;border-radius:11px}
+.scan-icon {width:22px;height:22px}
+.toolbar {display:flex;gap:10px;margin-top:12px}
+.toolbar .btn {flex:1}
+.manual {display:flex;gap:8px;margin-top:12px}
+.manual input {
+  flex:1;min-width:0;font-size:16px;padding:12px 14px;border-radius:12px;
+  border:1px solid var(--line);background:var(--surface);color:var(--ink);
+}
+.manual input:focus {outline:2px solid var(--accent)}
+#scanner {display:none;margin-top:16px}
+#reader {width:100%;border-radius:16px;overflow:hidden;background:#000;border:1px solid var(--line)}
+#reader video {display:block;width:100%!important;height:auto!important}
+.scan-hint {color:var(--muted);font-size:13px;text-align:center;margin:10px 0 2px}
+#confirm {display:none;margin-top:16px}
+.confirm-card {
+  display:flex;gap:14px;background:var(--card);border:1px solid var(--line);
+  border-radius:16px;padding:14px;box-shadow:0 4px 14px var(--shadow);
+}
+.cover {width:72px;height:106px;border-radius:8px;object-fit:cover;background:var(--accent-soft);flex:none}
+.cover.ph {display:flex;align-items:center;justify-content:center;color:var(--accent);font-family:Georgia,serif;font-size:26px;font-weight:600}
+.ctitle {font-family:Georgia,serif;font-size:18px;font-weight:600;margin:2px 0}
+.cauthor {color:var(--muted);font-size:14px}
+.cyear {color:var(--muted);font-size:12.5px;margin-top:2px}
+.confirm-actions {display:flex;gap:10px;margin-top:12px}
+.confirm-actions .btn {flex:1}
+.shelf-head {display:flex;align-items:baseline;justify-content:space-between;margin:24px 0 10px}
+.shelf-head h2 {font-family:Georgia,serif;font-size:20px;margin:0;font-weight:600}
+.count {color:var(--muted);font-size:13px}
+.filters {display:flex;gap:7px;overflow-x:auto;padding-bottom:4px;margin-bottom:6px}
+.filter {flex:none;border:1px solid var(--line);background:var(--surface);color:var(--muted);font-size:13px;padding:6px 12px;border-radius:20px;cursor:pointer;white-space:nowrap}
+.filter.active {background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.book {display:flex;gap:12px;align-items:center;padding:10px;margin-bottom:10px;background:var(--card);border:1px solid var(--line);border-radius:14px}
+.book .cover {width:46px;height:68px;font-size:18px}
+.book .info {flex:1;min-width:0}
+.book .bt {font-family:Georgia,serif;font-size:15.5px;font-weight:600;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.book .ba {color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.status {display:inline-block;margin-top:5px;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:20px;cursor:pointer;border:1px solid currentColor;background:transparent}
+.status.want {color:var(--want)}
+.status.reading {color:var(--reading)}
+.status.read {color:var(--read)}
+.remove {flex:none;width:30px;height:30px;border-radius:50%;border:0;cursor:pointer;background:transparent;color:var(--muted);font-size:18px}
+.empty {text-align:center;color:var(--muted);padding:34px 10px}
+.empty svg {width:54px;height:54px;opacity:.5;margin-bottom:8px}
+.hint {display:none;background:var(--accent-soft);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:11px 14px;font-size:13.5px;margin-top:14px;position:relative}
+.hint .x {position:absolute;right:8px;top:6px;background:none;border:0;color:var(--muted);font-size:18px;cursor:pointer}
+#toast {position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--bg);padding:11px 18px;border-radius:24px;font-size:14px;opacity:0;pointer-events:none;transition:all .25s;max-width:90%;text-align:center;z-index:50}
+#toast.show {opacity:1;transform:translateX(-50%) translateY(0)}
+footer {text-align:center;color:var(--muted);font-size:12px;margin-top:30px}
+footer a {color:var(--accent)}
+.spinner {width:18px;height:18px;border:2.5px solid var(--accent-soft);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;display:inline-block}
+@keyframes spin {to {transform:rotate(360deg)}}
 </style>
-
 </head>
 <body>
 <div class="wrap">
- <header>
- <svg class="logo" viewBox="0 0 512 512" aria-hidden="true">
- <rect width="512" height="512" rx="110" fill="var(--accent)"/>
- <polygon points="110,196 256,222 256,356 110,330" fill="#f6efe2"/>
- <polygon points="402,196 256,222 256,356 402,330" fill="#f6efe2"/>
- <line x1="256" y1="222" x2="256" y2="356" stroke="#d9c7b6" stroke-width="5"/>
- </svg>
- <h1>My Shelf</h1>
- <div class="tagline">Scan a book’s barcode to add it to your shelf</div>
- </header>
+<header>
+  <svg class="logo" viewBox="0 0 512 512" aria-hidden="true">
+    <rect width="512" height="512" rx="110" fill="var(--accent)"/>
+    <polygon points="110,196 256,222 256,356 110,330" fill="#f6efe2"/>
+    <polygon points="402,196 256,222 256,356 402,330" fill="#f6efe2"/>
+    <line x1="256" y1="222" x2="256" y2="356" stroke="#d9c7b6" stroke-width="5"/>
+  </svg>
+  <h1>My Shelf</h1>
+  <div class="tagline">Scan a book’s barcode to add it to your shelf</div>
+</header>
 
- <button id="scanBtn" class="btn btn-primary">
- <svg class="scan-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
- <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/>
- <path d="M7 8v8M10 8v8M13 8v8M17 8v8"/>
- </svg>
- Scan a book
- </button>
+<button id="scanBtn" class="btn btn-primary">
+  <svg class="scan-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+    <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/>
+    <path d="M7 8v8M10 8v8M13 8v8M17 8v8"/>
+  </svg>
+  Scan a book
+</button>
 
- <div class="manual">
- <input id="isbnInput" type="text" inputmode="numeric" placeholder="…or type an ISBN" aria-label="ISBN" />
- <button id="addBtn" class="btn btn-ghost btn-sm">Add</button>
- </div>
-
- <button id="installBtn" class="btn btn-ghost" style="display:none; margin-top:12px">
- <svg class="scan-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
- <path d="M12 3v12M8 11l4 4 4-4M4 19h16"/>
- </svg>
- Install app
- </button>
-
- <div id="hint" class="hint">
- <button class="x" id="hintClose" aria-label="Dismiss">×</button>
- <b>Install the app:</b> tap <b>Share</b> then <b>Add to Home Screen</b> — it opens full-screen and the scanner works best there.
- </div>
-
- <!-- Scanner -->
- <div id="scanner">
- <div id="reader"></div>
- <div class="scan-hint">Point the rear camera at the barcode on the back of the book</div>
- <button id="cancelScan" class="btn btn-ghost" style="margin-top:8px">Cancel</button>
- </div>
-
- <!-- Confirmation -->
- <div id="confirm"></div>
-
- <!-- Shelf -->
- <div class="shelf-head">
- <h2>Your shelf</h2>
- <span class="count" id="count"></span>
- </div>
- <div class="filters" id="filters">
- <button class="filter active" data-f="all">All</button>
- <button class="filter" data-f="want">Want to read</button>
- <button class="filter" data-f="reading">Reading</button>
- <button class="filter" data-f="read">Read</button>
- </div>
- <div id="shelf"></div>
-
- <div class="toolbar">
- <button id="exportBtn" class="btn btn-ghost btn-sm">Export</button>
- <button id="importBtn" class="btn btn-ghost btn-sm">Import</button>
- <input id="importFile" type="file" accept="application/json" hidden />
- </div>
-
- <footer>
- Book data from <a href="https://openlibrary.org" target="_blank" rel="noopener">Open Library</a> ·
- Your shelf is saved on this device
- </footer>
+<div class="manual">
+  <input id="isbnInput" type="text" placeholder="…or type an ISBN or book title" aria-label="ISBN or title">
+  <button id="addBtn" class="btn btn-ghost btn-sm">Add</button>
 </div>
 
+<button id="installBtn" class="btn btn-ghost" style="display:none;margin-top:12px">Install app</button>
+<div id="hint" class="hint">
+  <button class="x" id="hintClose" aria-label="Dismiss">×</button>
+  <b>Install the app:</b> tap Share, then Add to Home Screen.
+</div>
+
+<div id="scanner">
+  <div id="reader"></div>
+  <div class="scan-hint">Point the rear camera at the barcode on the back of the book</div>
+  <button id="cancelScan" class="btn btn-ghost" style="margin-top:8px">Cancel</button>
+</div>
+
+<div id="confirm"></div>
+
+<div class="shelf-head">
+  <h2>Your shelf</h2>
+  <span class="count" id="count"></span>
+</div>
+<div class="filters" id="filters">
+  <button class="filter active" data-f="all">All</button>
+  <button class="filter" data-f="want">Want to read</button>
+  <button class="filter" data-f="reading">Reading</button>
+  <button class="filter" data-f="read">Read</button>
+</div>
+<div id="shelf"></div>
+
+<div class="toolbar">
+  <button id="exportBtn" class="btn btn-ghost btn-sm">Export</button>
+  <button id="importBtn" class="btn btn-ghost btn-sm">Import</button>
+  <input id="importFile" type="file" accept="application/json" hidden>
+</div>
+
+<footer>
+  Book data from <a href="https://openlibrary.org" target="_blank" rel="noopener">Open Library</a> ·
+  Your shelf is saved on this device
+</footer>
+</div>
 <div id="toast"></div>
 
-<!-- Barcode scanning library -->
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 (function(){
- "use strict";
+"use strict";
 
- // ---------- storage ----------
- var KEY = "myshelf.books.v1";
- var shelf = [];
- try { shelf = JSON.parse(localStorage.getItem(KEY)) || []; } catch(e){ shelf = []; }
- function save(){ try { localStorage.setItem(KEY, JSON.stringify(shelf)); } catch(e){ toast("Couldn't save — storage is full or blocked"); } }
+var KEY="myshelf.books.v1";
+var shelf=[];
+try {
+  var stored=JSON.parse(localStorage.getItem(KEY)||"[]");
+  if(Array.isArray(stored)) shelf=stored;
+} catch(e) { shelf=[]; }
 
- var STATUS = ["want","reading","read"];
- var STATUS_LABEL = { want:"Want to read", reading:"Reading", read:"Read" };
+function save(){
+  try { localStorage.setItem(KEY,JSON.stringify(shelf)); }
+  catch(e){ toast("Couldn't save — storage is full or blocked"); }
+}
 
- // ---------- elements ----------
- var $ = function(id){ return document.getElementById(id); };
- var shelfEl=$("shelf"), countEl=$("count"), confirmEl=$("confirm"),
- scannerEl=$("scanner"), toastEl=$("toast");
- var activeFilter = "all";
+var STATUS=["want","reading","read"];
+var STATUS_LABEL={want:"Want to read",reading:"Reading",read:"Read"};
+var $=function(id){return document.getElementById(id);};
+var shelfEl=$("shelf"),countEl=$("count"),confirmEl=$("confirm");
+var scannerEl=$("scanner"),toastEl=$("toast");
+var activeFilter="all",scanner=null,busy=false,toastTimer;
 
- // ---------- helpers ----------
- function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
- function initials(t){ return (t||"?").trim().charAt(0).toUpperCase(); }
- function cleanIsbn(s){ return String(s||"").replace(/[^0-9Xx]/g,"").toUpperCase(); }
+function esc(s){
+  return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+  });
+}
+function initials(t){return (t||"?").trim().charAt(0).toUpperCase();}
+function cleanIsbn(s){return String(s||"").replace(/[^0-9Xx]/g,"").toUpperCase();}
 
- var toastTimer;
- function toast(msg){
- toastEl.textContent = msg; toastEl.classList.add("show");
- clearTimeout(toastTimer); toastTimer = setTimeout(function(){ toastEl.classList.remove("show"); }, 2600);
- }
+function toast(msg){
+  toastEl.textContent=msg;
+  toastEl.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){toastEl.classList.remove("show");},2600);
+}
 
- // ---------- rendering ----------
- function coverHTML(b, cls){
- cls = cls || "cover";
- if (b.cover){
- return '<img class="'+cls+'" src="'+esc(b.cover)+'" alt="" loading="lazy" '+
- 'onerror="this.outerHTML=\''+'<div class=\\\''+cls+' ph\\\'>'+esc(initials(b.title))+'</div>\'">';
- }
- return '<div class="'+cls+' ph">'+esc(initials(b.title))+'</div>';
- }
+function coverHTML(b,cls){
+  cls=cls||"cover";
+  if(b.cover){
+    return '<img class="'+cls+'" src="'+esc(b.cover)+'" alt="" loading="lazy" onerror="this.style.display=\'none\'">';
+  }
+  return '<div class="'+cls+' ph">'+esc(initials(b.title))+'</div>';
+}
 
- function renderShelf(){
- countEl.textContent = shelf.length ? (shelf.length + (shelf.length===1?" book":" books")) : "";
- var list = shelf.filter(function(b){ return activeFilter==="all" || b.status===activeFilter; });
+function renderShelf(){
+  countEl.textContent=shelf.length?(shelf.length+(shelf.length===1?" book":" books")):"";
+  var list=shelf.filter(function(b){return activeFilter==="all"||b.status===activeFilter;});
 
- if (!shelf.length){
- shelfEl.innerHTML =
- '<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">'+
- '<path d="M4 5a2 2 0 0 1 2-2h7v18H6a2 2 0 0 0-2 2zM20 3a0 0 0 0 1 0 0v16a2 2 0 0 1-2 2h-5V3z"/></svg>'+
- '<div>Your shelf is empty.<br>Scan a book to begin.</div></div>';
- return;
- }
- if (!list.length){
- shelfEl.innerHTML = '<div class="empty">No books with this status yet.</div>';
- return;
- }
+  if(!shelf.length){
+    shelfEl.innerHTML='<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 5a2 2 0 0 1 2-2h7v18H6a2 2 0 0 0-2 2zM20 3v16a2 2 0 0 1-2 2h-5V3z"/></svg><div>Your shelf is empty.<br>Scan a book to begin.</div></div>';
+    return;
+  }
+  if(!list.length){
+    shelfEl.innerHTML='<div class="empty">No books with this status yet.</div>';
+    return;
+  }
 
- shelfEl.innerHTML = list.map(function(b){
- return '<div class="book" data-isbn="'+esc(b.isbn)+'">'+
- coverHTML(b)+
- '<div class="info">'+
- '<p class="bt">'+esc(b.title)+'</p>'+
- '<div class="ba">'+esc(b.authors && b.authors.length ? b.authors.join(", ") : "Unknown author")+(b.year?(" · "+esc(b.year)):"")+'</div>'+
- '<button class="status '+esc(b.status)+'" data-act="status">'+esc(STATUS_LABEL[b.status])+'</button>'+
- '</div>'+
- '<button class="remove" data-act="remove" aria-label="Remove">×</button>'+
- '</div>';
- }).join("");
- }
+  shelfEl.innerHTML=list.map(function(b){
+    return '<div class="book" data-isbn="'+esc(b.isbn)+'">'+
+      coverHTML(b)+
+      '<div class="info"><p class="bt">'+esc(b.title)+'</p>'+
+      '<div class="ba">'+esc(b.authors&&b.authors.length?b.authors.join(", "):"Unknown author")+(b.year?" · "+esc(b.year):"")+'</div>'+
+      '<button class="status '+esc(b.status)+'" data-act="status">'+esc(STATUS_LABEL[b.status]||"Want to read")+'</button></div>'+
+      '<button class="remove" data-act="remove" aria-label="Remove">×</button></div>';
+  }).join("");
+}
 
- // delegate clicks in the shelf (status cycle + remove)
- shelfEl.addEventListener("click", function(e){
- var btn = e.target.closest("[data-act]"); if(!btn) return;
- var row = e.target.closest(".book"); if(!row) return;
- var isbn = row.getAttribute("data-isbn");
- var i = shelf.findIndex(function(b){ return b.isbn===isbn; });
- if (i<0) return;
- if (btn.getAttribute("data-act")==="status"){
- var ni = (STATUS.indexOf(shelf[i].status)+1) % STATUS.length;
- shelf[i].status = STATUS[ni]; save(); renderShelf();
- } else {
- var cu = shelf[i].cover; shelf.splice(i,1); save(); renderShelf(); removeCover(cu); toast("Removed");
- }
- });
+shelfEl.addEventListener("click",function(e){
+  var btn=e.target.closest("[data-act]");
+  if(!btn)return;
+  var row=e.target.closest(".book");
+  if(!row)return;
+  var isbn=row.getAttribute("data-isbn");
+  var i=shelf.findIndex(function(b){return b.isbn===isbn;});
+  if(i<0)return;
 
- // filters
- $("filters").addEventListener("click", function(e){
- var f = e.target.closest(".filter"); if(!f) return;
- activeFilter = f.getAttribute("data-f");
- [].forEach.call(this.children, function(c){ c.classList.toggle("active", c===f); });
- renderShelf();
- });
+  if(btn.dataset.act==="status"){
+    shelf[i].status=STATUS[(STATUS.indexOf(shelf[i].status)+1)%STATUS.length];
+    save();renderShelf();
+  } else {
+    shelf.splice(i,1);save();renderShelf();toast("Removed");
+  }
+});
 
- // ---------- Open Library lookup ----------
- function jsonp(url, cb){
- return new Promise(function(resolve, reject){
- var s = document.createElement("script");
- var to = setTimeout(function(){ reject(new Error("timeout")); cleanup(); }, 9000);
- function cleanup(){ clearTimeout(to); try{ delete window[cb]; }catch(_){ window[cb]=undefined; } s.remove(); }
- window[cb] = function(d){ resolve(d); cleanup(); };
- s.onerror = function(){ reject(new Error("load error")); cleanup(); };
- s.src = url; document.head.appendChild(s);
- });
- }
+$("filters").addEventListener("click",function(e){
+  var f=e.target.closest(".filter");
+  if(!f)return;
+  activeFilter=f.dataset.f;
+  [].forEach.call(this.children,function(c){c.classList.toggle("active",c===f);});
+  renderShelf();
+});
 
- async function lookupBook(isbn){
- var key = "ISBN:" + isbn;
- var base = "https://openlibrary.org/api/books?bibkeys=" + encodeURIComponent(key) + "&jscmd=data&format=json";
- var data = null;
- // 1) normal fetch (CORS)
- try {
- var res = await fetch(base, { headers:{ "Accept":"application/json" } });
- if (res.ok) data = await res.json();
- } catch(e){ /* fall through to JSONP */ }
- // 2) JSONP fallback (bypasses CORS entirely)
- if (!data){
- try { data = await jsonp(base + "&callback=__olcb", "__olcb"); } catch(e){ data = null; }
- }
- if (!data || !data[key]) return null;
- var b = data[key];
- var authors = (b.authors || []).map(function(a){ return a.name; }).filter(Boolean);
- var cover = (b.cover && (b.cover.medium || b.cover.large || b.cover.small)) ||
- ("https://covers.openlibrary.org/b/isbn/" + isbn + "-M.jpg?default=false");
- var ym = (b.publish_date || "").match(/\d{4}/);
- return { isbn:isbn, title:b.title || "Untitled", authors:authors, cover:cover, year: ym?ym[0]:"", status:"want", addedAt:Date.now() };
- }
+/* ---------- ISBN lookup ---------- */
+async function lookupBook(isbn){
+  var key="ISBN:"+isbn;
 
- // ---------- offline cover cache ----------
- // Covers can't be read as bytes (no CORS on the cover server), but they can be
- // stored for display. We put the image into a Cache the service worker reads from,
- // so the cover keeps showing even with no connection.
- var COVER_CACHE = "myshelf-covers-v1";
- function saveCover(u){
- if (!u || !("caches" in window)) return;
- try {
- caches.open(COVER_CACHE).then(function(c){
- return fetch(u, { mode:"no-cors" }).then(function(resp){ return c.put(u, resp); });
- }).catch(function(){});
- } catch(e){}
- }
- function removeCover(u){
- if (!u || !("caches" in window)) return;
- try { caches.open(COVER_CACHE).then(function(c){ c.delete(u); }).catch(function(){}); } catch(e){}
- }
+  /* 1. Open Library's direct edition endpoint */
+  try {
+    var url="https://openlibrary.org/api/books?bibkeys="+encodeURIComponent(key)+"&jscmd=data&format=json";
+    var res=await fetch(url);
+    if(res.ok){
+      var data=await res.json();
+      if(data&&data[key]){
+        var b=data[key];
+        var date=(b.publish_date||"").match(/\d{4}/);
+        return {
+          isbn:isbn,title:b.title||"Untitled",
+          authors:(b.authors||[]).map(function(a){return a.name;}).filter(Boolean),
+          cover:(b.cover&&(b.cover.medium||b.cover.large||b.cover.small))||"",
+          year:date?date[0]:"",status:"want",addedAt:Date.now()
+        };
+      }
+    }
+  } catch(e){}
 
- // ---------- confirm + add ----------
- function showConfirm(b){
- confirmEl.innerHTML =
- '<div class="confirm-card">'+ coverHTML(b) +
- '<div style="flex:1;min-width:0">'+
- '<div class="ctitle">'+esc(b.title)+'</div>'+
- '<div class="cauthor">'+esc(b.authors && b.authors.length ? b.authors.join(", ") : "Unknown author")+'</div>'+
- (b.year?('<div class="cyear">'+esc(b.year)+'</div>'):"")+
- '<div class="cyear" style="margin-top:4px">ISBN '+esc(b.isbn)+'</div>'+
- '</div>'+
- '</div>'+
- '<div class="confirm-actions">'+
- '<button class="btn btn-ghost" id="cAgain">Scan another</button>'+
- '<button class="btn btn-primary" id="cAdd">Add to shelf</button>'+
- '</div>';
- confirmEl.style.display = "block";
- $("cAdd").onclick = function(){ addBook(b); confirmEl.style.display="none"; };
- $("cAgain").onclick = function(){ confirmEl.style.display="none"; startScan(); };
- }
+  /* 2. Search Open Library by ISBN */
+  try {
+    var url2="https://openlibrary.org/search.json?isbn="+encodeURIComponent(isbn)+
+      "&limit=10&fields=key,title,author_name,first_publish_year,cover_i,isbn";
+    var r2=await fetch(url2);
+    if(r2.ok){
+      var d2=await r2.json();
+      if(d2.docs&&d2.docs.length){
+        var exact=d2.docs.find(function(doc){
+          return (doc.isbn||[]).some(function(value){
+            return cleanIsbn(value)===isbn;
+          });
+        })||d2.docs[0];
+        return bookFromDoc(exact,isbn);
+      }
+    }
+  } catch(e){}
 
- function addBook(b){
- if (shelf.some(function(x){ return x.isbn===b.isbn; })){
- toast("Already on your shelf"); renderShelf(); return;
- }
- shelf.unshift(b); save(); renderShelf(); saveCover(b.cover); toast("Added “" + b.title + "”");
- }
+  /* 3. Google Books fallback */
+  try {
+    var url3="https://www.googleapis.com/books/v1/volumes?q=isbn:"+encodeURIComponent(isbn)+"&maxResults=10";
+    var r3=await fetch(url3);
+    if(r3.ok){
+      var d3=await r3.json();
+      if(d3.items&&d3.items.length){
+        var item=d3.items.find(function(entry){
+          return ((entry.volumeInfo||{}).industryIdentifiers||[]).some(function(id){
+            return cleanIsbn(id.identifier)===isbn;
+          });
+        })||d3.items[0];
 
- function showLoading(isbn){
- confirmEl.innerHTML = '<div class="confirm-card" style="align-items:center"><span class="spinner"></span>'+
- '<div style="margin-left:4px">Looking up ISBN '+esc(isbn)+'…</div></div>';
- confirmEl.style.display = "block";
- }
+        var v=item.volumeInfo||{};
+        var ids=v.industryIdentifiers||[];
+        var matched=ids.find(function(id){return cleanIsbn(id.identifier)===isbn;});
+        var pub=(v.publishedDate||"").match(/\d{4}/);
+        var image=v.imageLinks||{};
 
- async function handleIsbn(raw){
- var isbn = cleanIsbn(raw);
- if (isbn.length < 10){ toast("That doesn't look like a book barcode"); return; }
- if (shelf.some(function(x){ return x.isbn===isbn; })){ toast("Already on your shelf"); return; }
- showLoading(isbn);
- var book = await lookupBook(isbn);
- if (!book){
- confirmEl.innerHTML = '<div class="confirm-card"><div>Couldn’t find <b>ISBN '+esc(isbn)+'</b> on Open Library.'+
- '<div class="cyear" style="margin-top:6px">Try again, or check the number.</div></div></div>'+
- '<div class="confirm-actions"><button class="btn btn-ghost" id="cAgain2">Scan another</button></div>';
- $("cAgain2").onclick = function(){ confirmEl.style.display="none"; startScan(); };
- return;
- }
- showConfirm(book);
- }
+        return {
+          isbn:matched?cleanIsbn(matched.identifier):isbn,
+          title:v.title||"Untitled",authors:v.authors||[],
+          cover:(image.thumbnail||image.smallThumbnail||"").replace(/^http:/,"https:"),
+          year:pub?pub[0]:"",status:"want",addedAt:Date.now()
+        };
+      }
+    }
+  } catch(e){}
 
- // ---------- scanner ----------
- var scanner = null, busy = false;
+  return null;
+}
 
- async function startScan(){
- if (typeof Html5Qrcode === "undefined"){ toast("Scanner library didn't load — check your connection"); return; }
- confirmEl.style.display = "none";
- scannerEl.style.display = "block";
- scannerEl.scrollIntoView({ behavior:"smooth", block:"center" });
- busy = false;
+function bookFromDoc(doc,fallbackIsbn){
+  var isbns=doc.isbn||[];
+  var matched=isbns.find(function(value){return cleanIsbn(value)===fallbackIsbn;});
+  var isbn=matched?cleanIsbn(matched):(isbns[0]?cleanIsbn(isbns[0]):fallbackIsbn);
+  return {
+    isbn:isbn||("OLID:"+(doc.key||Math.random().toString(36).slice(2))),
+    title:doc.title||"Untitled",
+    authors:doc.author_name||[],
+    cover:doc.cover_i?"https://covers.openlibrary.org/b/id/"+doc.cover_i+"-M.jpg":"",
+    year:doc.first_publish_year?String(doc.first_publish_year):"",
+    status:"want",addedAt:Date.now()
+  };
+}
 
- scanner = new Html5Qrcode("reader", {
- formatsToSupport: [
- Html5QrcodeSupportedFormats.EAN_13,
- Html5QrcodeSupportedFormats.EAN_8,
- Html5QrcodeSupportedFormats.UPC_A,
- Html5QrcodeSupportedFormats.UPC_E
- ],
- experimentalFeatures: { useBarCodeDetectorIfSupported: true },
- verbose: false
- });
+function bookFromTitleDoc(doc){
+  return bookFromDoc(doc,"");
+}
 
- var config = {
- fps: 10,
- qrbox: function(vw, vh){ var w = Math.min(300, Math.floor(vw*0.82)); return { width:w, height:Math.max(90, Math.floor(w*0.52)) }; }
- };
+function showConfirm(b){
+  confirmEl.innerHTML='<div class="confirm-card">'+coverHTML(b)+
+    '<div style="flex:1;min-width:0"><div class="ctitle">'+esc(b.title)+'</div>'+
+    '<div class="cauthor">'+esc((b.authors||[]).join(", ")||"Unknown author")+'</div>'+
+    (b.year?'<div class="cyear">'+esc(b.year)+'</div>':'')+
+    '<div class="cyear">ISBN '+esc(b.isbn)+'</div></div></div>'+
+    '<div class="confirm-actions"><button class="btn btn-ghost" id="cAgain">Scan another</button>'+
+    '<button class="btn btn-primary" id="cAdd">Add to shelf</button></div>';
+  confirmEl.style.display="block";
+  $("cAdd").onclick=function(){addBook(b);confirmEl.style.display="none";};
+  $("cAgain").onclick=function(){confirmEl.style.display="none";startScan();};
+}
 
- function onSuccess(text){
- if (busy) return; busy = true;
- if (navigator.vibrate) navigator.vibrate(60);
- stopScan().then(function(){ handleIsbn(text); });
- }
- function onError(){ /* per-frame decode misses — ignore */ }
+function addBook(b){
+  if(shelf.some(function(x){return x.isbn===b.isbn;})){
+    toast("Already on your shelf");renderShelf();return;
+  }
+  shelf.unshift(b);save();renderShelf();toast("Added: "+b.title);
+}
 
- try {
- await scanner.start({ facingMode: "environment" }, config, onSuccess, onError);
- } catch(e){
- // retry without the environment constraint (some devices reject it)
- try { await scanner.start(undefined, config, onSuccess, onError); }
- catch(e2){
- scannerEl.style.display = "none";
- toast("Camera unavailable — allow camera access, or type the ISBN instead");
- }
- }
- }
+function showLoading(msg){
+  confirmEl.innerHTML='<div class="confirm-card"><span class="spinner"></span><div style="margin-left:8px">'+esc(msg)+'</div></div>';
+  confirmEl.style.display="block";
+}
 
- function stopScan(){
- scannerEl.style.display = "none";
- if (!scanner) return Promise.resolve();
- var s = scanner; scanner = null;
- return s.stop().then(function(){ s.clear(); }).catch(function(){});
- }
+async function handleIsbn(raw){
+  var isbn=cleanIsbn(raw);
+  if(isbn.length!==10&&isbn.length!==13){
+    toast("Enter a valid 10- or 13-digit ISBN");return;
+  }
+  if(shelf.some(function(x){return cleanIsbn(x.isbn)===isbn;})){
+    toast("Already on your shelf");return;
+  }
+  showLoading("Searching book databases…");
+  var book=await lookupBook(isbn);
 
- $("scanBtn").addEventListener("click", startScan);
- $("cancelScan").addEventListener("click", function(){ stopScan(); });
+  if(!book){
+    confirmEl.innerHTML='<div class="confirm-card"><div>Couldn’t find ISBN <b>'+esc(isbn)+'</b> in Open Library or Google Books.'+
+      '<div class="cyear" style="margin-top:6px">Try searching by the book title instead.</div></div></div>'+
+      '<div class="confirm-actions"><button class="btn btn-ghost" id="cAgain2">Scan another</button>'+
+      '<button class="btn btn-primary" id="cTitle">Search by title</button></div>';
+    $("cAgain2").onclick=function(){confirmEl.style.display="none";startScan();};
+    $("cTitle").onclick=function(){
+      var input=$("isbnInput");input.focus();
+      input.scrollIntoView({behavior:"smooth",block:"center"});
+    };
+    return;
+  }
+  showConfirm(book);
+}
 
- // manual add
- function manualAdd(){
- var v = $("isbnInput").value; if(!v.trim()) return;
- $("isbnInput").value = ""; $("isbnInput").blur();
- handleIsbn(v);
- }
- $("addBtn").addEventListener("click", manualAdd);
- $("isbnInput").addEventListener("keydown", function(e){ if(e.key==="Enter") manualAdd(); });
+/* ---------- Title search ---------- */
+async function searchByTitle(q){
+  showLoading('Searching for "'+q+'"…');
+  var docs=[];
+  try {
+    var url="https://openlibrary.org/search.json?q="+encodeURIComponent(q)+
+      "&limit=12&fields=key,title,author_name,first_publish_year,cover_i,isbn";
+    var res=await fetch(url);
+    if(res.ok){
+      var data=await res.json();
+      docs=data.docs||[];
+    }
+  } catch(e){}
 
- // export / import
- $("exportBtn").addEventListener("click", function(){
- if(!shelf.length){ toast("Nothing to export yet"); return; }
- var blob = new Blob([JSON.stringify(shelf,null,2)], { type:"application/json" });
- var a = document.createElement("a");
- a.href = URL.createObjectURL(blob); a.download = "my-shelf.json";
- document.body.appendChild(a); a.click(); a.remove();
- setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
- });
- $("importBtn").addEventListener("click", function(){ $("importFile").click(); });
- $("importFile").addEventListener("change", function(e){
- var file = e.target.files[0]; if(!file) return;
- var r = new FileReader();
- r.onload = function(){
- try{
- var arr = JSON.parse(r.result);
- if(!Array.isArray(arr)) throw new Error("bad");
- var added = 0;
- arr.forEach(function(b){
- if(b && b.isbn && !shelf.some(function(x){ return x.isbn===b.isbn; })){
- if(!b.status) b.status="want"; shelf.push(b); added++;
- }
- });
- save(); renderShelf(); toast("Imported "+added+" book"+(added===1?"":"s"));
- }catch(err){ toast("That file isn't a valid shelf export"); }
- };
- r.readAsText(file); e.target.value = "";
- });
+  if(!docs.length){
+    confirmEl.innerHTML='<div class="confirm-card">No matches found. Check the spelling or try another title.</div>';
+    return;
+  }
 
- // ---------- install experience (works on both platforms) ----------
- var standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
- var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  confirmEl.innerHTML='<div class="scan-hint" style="text-align:left">Tap the correct book:</div>'+
+    docs.map(function(doc,i){
+      var b=bookFromTitleDoc(doc);
+      return '<div class="book" data-result="'+i+'" style="cursor:pointer">'+
+        coverHTML(b)+'<div class="info"><p class="bt">'+esc(b.title)+'</p>'+
+        '<div class="ba">'+esc(b.authors.join(", ")||"Unknown author")+
+        (b.year?" · "+esc(b.year):"")+'</div></div></div>';
+    }).join("");
+  confirmEl.style.display="block";
 
- // iOS can't trigger an install prompt from a page, so show a how-to hint.
- if (isIOS && !standalone && !localStorage.getItem("hint.dismissed")){
- $("hint").style.display = "block";
- }
- $("hintClose").addEventListener("click", function(){
- $("hint").style.display = "none";
- try { localStorage.setItem("hint.dismissed","1"); } catch(e){}
- });
+  confirmEl.querySelectorAll("[data-result]").forEach(function(el){
+    el.addEventListener("click",function(){
+      showConfirm(bookFromTitleDoc(docs[Number(el.dataset.result)]));
+    });
+  });
+}
 
- // Android / Chromium: the browser offers a real install prompt — surface it as a button.
- var deferredPrompt = null;
- window.addEventListener("beforeinstallprompt", function(e){
- e.preventDefault();
- deferredPrompt = e;
- if (!standalone) $("installBtn").style.display = "flex";
- });
- $("installBtn").addEventListener("click", function(){
- if (!deferredPrompt) return;
- deferredPrompt.prompt();
- deferredPrompt.userChoice.catch(function(){}).then(function(){
- deferredPrompt = null;
- $("installBtn").style.display = "none";
- });
- });
- window.addEventListener("appinstalled", function(){
- $("installBtn").style.display = "none";
- });
+function handleQuery(raw){
+  var s=(raw||"").trim();
+  if(!s)return;
+  var cleaned=cleanIsbn(s);
+  if((cleaned.length===10||cleaned.length===13)&&/^[0-9Xx\s-]+$/.test(s)){
+    handleIsbn(cleaned);
+  } else {
+    searchByTitle(s);
+  }
+}
 
- // service worker
- if ("serviceWorker" in navigator){
- window.addEventListener("load", function(){ navigator.serviceWorker.register("sw.js").catch(function(){}); });
- }
+/* ---------- Barcode scanner ---------- */
+async function startScan(){
+  if(typeof Html5Qrcode==="undefined"){
+    toast("Scanner library didn't load. Check your internet connection.");return;
+  }
+  confirmEl.style.display="none";
+  scannerEl.style.display="block";
+  scannerEl.scrollIntoView({behavior:"smooth",block:"center"});
+  busy=false;
 
- renderShelf();
+  scanner=new Html5Qrcode("reader",{
+    formatsToSupport:[
+      Html5QrcodeSupportedFormats.EAN_13,
+      Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.UPC_A,
+      Html5QrcodeSupportedFormats.UPC_E
+    ],
+    verbose:false
+  });
+
+  var config={
+    fps:10,
+    qrbox:function(w,h){
+      var width=Math.min(300,Math.floor(w*.82));
+      return {width:width,height:Math.max(90,Math.floor(width*.52))};
+    }
+  };
+
+  function success(text){
+    if(busy)return;
+    busy=true;
+    stopScan().then(function(){handleIsbn(text);});
+  }
+
+  try {
+    await scanner.start({facingMode:"environment"},config,success,function(){});
+  } catch(e) {
+    scannerEl.style.display="none";
+    toast("Camera unavailable. Allow camera access or type the ISBN.");
+  }
+}
+
+function stopScan(){
+  scannerEl.style.display="none";
+  if(!scanner)return Promise.resolve();
+  var s=scanner;scanner=null;
+  return s.stop().then(function(){s.clear();}).catch(function(){});
+}
+
+$("scanBtn").addEventListener("click",startScan);
+$("cancelScan").addEventListener("click",stopScan);
+
+function manualAdd(){
+  var value=$("isbnInput").value.trim();
+  if(!value)return;
+  handleQuery(value);
+}
+$("addBtn").addEventListener("click",manualAdd);
+$("isbnInput").addEventListener("keydown",function(e){
+  if(e.key==="Enter"){e.preventDefault();manualAdd();}
+});
+
+/* ---------- Import and export ---------- */
+$("exportBtn").addEventListener("click",function(){
+  if(!shelf.length){toast("Nothing to export yet");return;}
+  var blob=new Blob([JSON.stringify(shelf,null,2)],{type:"application/json"});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement("a");
+  a.href=url;a.download="my-shelf.json";a.click();
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
+});
+
+$("importBtn").addEventListener("click",function(){$("importFile").click();});
+$("importFile").addEventListener("change",function(e){
+  var file=e.target.files[0];if(!file)return;
+  var reader=new FileReader();
+
+  reader.onload=function(){
+    try {
+      var arr=JSON.parse(reader.result);
+      if(!Array.isArray(arr))throw new Error("Invalid file");
+      var added=0;
+      arr.forEach(function(b){
+        if(!b||!b.isbn||shelf.some(function(x){return x.isbn===b.isbn;}))return;
+        if(!STATUS.includes(b.status))b.status="want";
+        shelf.push(b);added++;
+      });
+      save();renderShelf();toast("Imported "+added+" book(s)");
+    } catch(err){toast("That file isn't a valid shelf export");}
+    e.target.value="";
+  };
+  reader.readAsText(file);
+});
+
+/* ---------- Install and offline support ---------- */
+var standalone=window.matchMedia("(display-mode: standalone)").matches||window.navigator.standalone===true;
+var isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
+
+if(isIOS&&!standalone&&!localStorage.getItem("hint.dismissed")){
+  $("hint").style.display="block";
+}
+$("hintClose").addEventListener("click",function(){
+  $("hint").style.display="none";
+  try{localStorage.setItem("hint.dismissed","1");}catch(e){}
+});
+
+var deferredPrompt=null;
+window.addEventListener("beforeinstallprompt",function(e){
+  e.preventDefault();deferredPrompt=e;
+  if(!standalone)$("installBtn").style.display="flex";
+});
+$("installBtn").addEventListener("click",function(){
+  if(!deferredPrompt)return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(function(){
+    deferredPrompt=null;$("installBtn").style.display="none";
+  }).catch(function(){});
+});
+window.addEventListener("appinstalled",function(){
+  $("installBtn").style.display="none";
+});
+
+if("serviceWorker" in navigator){
+  window.addEventListener("load",function(){
+    navigator.serviceWorker.register("sw.js").catch(function(){});
+  });
+}
+
+renderShelf();
 })();
 </script>
 </body>

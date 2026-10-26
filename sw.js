@@ -3,7 +3,7 @@
 // - Book covers (covers.openlibrary.org): cached the first time they're shown,
 // so they stay visible offline. Everything else goes straight to the network.
 
-const CACHE = "myshelf-v2";
+const CACHE = "myshelf-v3";
 const COVERS = "myshelf-covers-v1";
 const ASSETS = [
  "./",
@@ -38,7 +38,9 @@ self.addEventListener("fetch", (event) => {
  const url = new URL(req.url);
 
  // Book covers: cache-first, so a cover you've seen once shows offline too.
- if (url.hostname === "covers.openlibrary.org") {
+ if (url.hostname === "covers.openlibrary.org" ||
+ url.hostname === "books.google.com" ||
+ url.hostname === "books.googleusercontent.com") {
  event.respondWith(
  caches.open(COVERS).then((cache) =>
  cache.match(req).then((hit) => {
