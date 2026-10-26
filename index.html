@@ -344,100 +344,122 @@
  }
 
 async function lookupBook(isbn){
- // 1) Try Open Library's dedicated ISBN edition endpoint first.
- // This is the canonical ISBN lookup: /isbn/{ISBN}.json
- try {
-   var editionRes = await fetch("https://openlibrary.org/isbn/" + encodeURIComponent(isbn) + ".json", {
-     headers:{ "Accept":"application/json" }
-   });
-   if (editionRes.ok) {
-     var edition = await editionRes.json();
-     if (edition && edition.title) {
-       var editionAuthors = [];
-       if (Array.isArray(edition.authors)) {
-         editionAuthors = await Promise.all(edition.authors.map(async function(author){
-           if (author && author.name) return author.name;
-           if (!author || !author.key) return "";
-           try {
-             var authorRes = await fetch("https://openlibrary.org" + author.key + ".json", {
-               headers:{ "Accept":"application/json" }
-             });
-             if (!authorRes.ok) return "";
-             var authorData = await authorRes.json();
-             return authorData.name || "";
-           } catch(e) { return ""; }
-         }));
-         editionAuthors = editionAuthors.filter(Boolean);
-       }
-       var editionCover = (edition.covers && edition.covers.length)
-         ? "https://covers.openlibrary.org/b/id/" + edition.covers[0] + "-M.jpg"
-         : "https://covers.openlibrary.org/b/isbn/" + isbn + "-M.jpg?default=false";
-       var editionYear = (edition.publish_date || "").match(/\d{4}/);
-       return { isbn:isbn, title:edition.title, authors:editionAuthors, cover:editionCover, publisher:Array.isArray(edition.publishers)?edition.publishers.join(", "):"", publicationDate:edition.publish_date || "",
-         year:editionYear ? editionYear[0] : "", status:"want", addedAt:Date.now() };
-     }
-   }
- } catch(e) { /* Continue to the other Open Library ISBN endpoints. */ }
+ // Check every configured source instead of stopping at the first result.
+ // Only accept a result when the provider explicitly confirms the ISBN.
+ var variants=[isbn], isbn10=isbn10From13(isbn);
+ if(isbn10) variants.push(isbn10);
+ var tasks=[
+  {name:"Open Library edition", run:function(){return lookupOpenLibraryEdition(isbn,variants);}},
+  {name:"Open Library Books API", run:function(){return lookupOpenLibraryBooks(isbn,variants);}},
+  {name:"Open Library search", run:function(){return lookupOpenLibrarySearch(isbn,variants);}},
+  {name:"Google Books", run:function(){return lookupGoogle(isbn,variants);}},
+  {name:"Internet Archive", run:function(){return lookupInternetArchive(isbn,variants);}},
+  {name:"Library of Congress", run:function(){return lookupLibraryOfCongressISBN(isbn,variants);}},
+  {name:"Wikidata", run:function(){return lookupWikidata(isbn,variants);}},
+  {name:"Crossref", run:function(){return lookupCrossref(isbn,variants);}}
+ ];
+ var settled=await Promise.all(tasks.map(async function(t){
+  try { return {name:t.name,book:await t.run(),error:false}; }
+  catch(e){ return {name:t.name,book:null,error:true}; }
+ }));
+ var found=settled.filter(function(x){return x.book && x.book.title;}).map(function(x){return x.book;});
+ lookupBook.lastReport=settled.map(function(x){return {name:x.name,status:x.book?"match":(x.error?"unavailable":"no match")};});
+ if(!found.length)return null;
+ // Merge complementary metadata from matching ISBN records; first provider's title wins.
+ var result=Object.assign({},found[0]);
+ found.slice(1).forEach(function(b){
+  if((!result.authors||!result.authors.length)&&b.authors&&b.authors.length)result.authors=b.authors;
+  if(!result.publisher&&b.publisher)result.publisher=b.publisher;
+  if(!result.publicationDate&&b.publicationDate)result.publicationDate=b.publicationDate;
+  if(!result.year&&b.year)result.year=b.year;
+  if(!result.cover&&b.cover)result.cover=b.cover;
+ });
+ result.isbn=isbn;
+ result.status="want";result.addedAt=Date.now();
+ return result;
+}
 
- // 2) Keep the Open Library Books API as a compatibility fallback.
- var key = "ISBN:" + isbn;
- var base = "https://openlibrary.org/api/books?bibkeys=" +
-   encodeURIComponent(key) + "&jscmd=data&format=json";
- try {
-   var res = await fetch(base, { headers:{ "Accept":"application/json" } });
-   if (res.ok) {
-     var data = await res.json();
-     if (data && data[key]) {
-       var b = data[key];
-       var authors = (b.authors || []).map(function(a){ return a.name; }).filter(Boolean);
-       var cover = (b.cover && (b.cover.medium || b.cover.large || b.cover.small)) ||
-         ("https://covers.openlibrary.org/b/isbn/" + isbn + "-M.jpg?default=false");
-       var ym = (b.publish_date || "").match(/\d{4}/);
-       return { isbn:isbn, title:b.title || "Untitled", authors:authors, cover:cover, publisher:Array.isArray(b.publishers)?b.publishers.join(", "):"", publicationDate:b.publish_date || "",
-         year:ym ? ym[0] : "", status:"want", addedAt:Date.now() };
-     }
-   }
- } catch(e) { /* Try the search endpoints below. */ }
+function exactIsbnMatch(values, variants){
+ if(!Array.isArray(values))values=values?[values]:[];
+ return values.some(function(v){return variants.indexOf(cleanIsbn(v))!==-1;});
+}
 
- // Search all Open Library editions by ISBN; this finds records the direct
- // edition endpoint may not return.
- try {
-   var searchUrl = "https://openlibrary.org/search.json?isbn=" +
-     encodeURIComponent(isbn) +
-     "&limit=5&fields=key,title,author_name,first_publish_year,cover_i,isbn";
-   var searchRes = await fetch(searchUrl, { headers:{ "Accept":"application/json" } });
-   if (searchRes.ok) {
-     var searchData = await searchRes.json();
-     if (searchData.docs && searchData.docs.length) {
-       var exact = searchData.docs.find(function(doc) {
-         return Array.isArray(doc.isbn) && doc.isbn.some(function(value) {
-           return String(value).replace(/[^0-9Xx]/g, "").toUpperCase() === isbn;
-         });
-       }) || searchData.docs[0];
-       return bookFromISBNDoc(exact, isbn);
-     }
-   }
- } catch(e) { /* Continue to Google Books. */ }
-
- // 4) Google Books is an independent fallback for ISBNs missing from Open Library.
- // If its quota is exhausted (for example HTTP 429), lookupGoogle returns null
- // and we continue to the next provider instead of stopping the lookup.
- var googleBook = await lookupGoogle(isbn);
- if (googleBook) return googleBook;
-
- // 5) Internet Archive catalog search is another no-key metadata source.
- // It may not have every print edition, but it can find records missing from OL.
- var archiveBook = await lookupInternetArchive(isbn);
- if (archiveBook) return archiveBook;
-
- // 6) Library of Congress public JSON API (no key required).
- var locBook = await lookupLibraryOfCongressISBN(isbn);
- if (locBook) return locBook;
-
+async function lookupOpenLibraryEdition(isbn,variants){
+ for(var i=0;i<variants.length;i++){
+  try{
+   var r=await fetch("https://openlibrary.org/isbn/"+encodeURIComponent(variants[i])+".json");
+   if(!r.ok)continue;
+   var d=await r.json();if(!d||!d.title)continue;
+   var authors=[];
+   if(Array.isArray(d.authors))authors=await Promise.all(d.authors.map(async function(a){
+    if(a.name)return a.name;if(!a.key)return "";
+    try{var ar=await fetch("https://openlibrary.org"+a.key+".json");if(!ar.ok)return "";return ((await ar.json()).name)||"";}catch(e){return "";}
+   }));
+   var date=d.publish_date||"",ym=date.match(/\d{4}/);
+   return {isbn:isbn,title:d.title,authors:authors.filter(Boolean),publisher:Array.isArray(d.publishers)?d.publishers.join(", "):(d.publishers||""),publicationDate:date,year:ym?ym[0]:"",cover:d.covers&&d.covers.length?"https://covers.openlibrary.org/b/id/"+d.covers[0]+"-M.jpg":"",status:"want"};
+  }catch(e){}
+ }
  return null;
 }
 
-async function lookupLibraryOfCongressISBN(isbn){
+async function lookupOpenLibraryBooks(isbn,variants){
+ for(var i=0;i<variants.length;i++){
+  try{
+   var key="ISBN:"+variants[i];
+   var r=await fetch("https://openlibrary.org/api/books?bibkeys="+encodeURIComponent(key)+"&jscmd=data&format=json");
+   if(!r.ok)continue;var data=await r.json(),b=data[key];if(!b||!b.title)continue;
+   var date=b.publish_date||"",ym=date.match(/\d{4}/);
+   return {isbn:isbn,title:b.title,authors:(b.authors||[]).map(function(a){return a.name;}).filter(Boolean),publisher:(b.publishers||[]).map(function(x){return x.name||x;}).join(", "),publicationDate:date,year:ym?ym[0]:"",cover:b.cover&&(b.cover.medium||b.cover.large||b.cover.small)||"",status:"want"};
+  }catch(e){}
+ }
+ return null;
+}
+
+async function lookupOpenLibrarySearch(isbn,variants){
+ for(var i=0;i<variants.length;i++){
+  try{
+   var r=await fetch("https://openlibrary.org/search.json?isbn="+encodeURIComponent(variants[i])+"&limit=10&fields=key,title,author_name,first_publish_year,cover_i,isbn,publisher,publish_date");
+   if(!r.ok)continue;var d=await r.json(),docs=d.docs||[];
+   var doc=docs.find(function(x){return exactIsbnMatch(x.isbn,variants);});
+   if(!doc)continue;
+   var b=bookFromISBNDoc(doc,isbn);b.isbn=isbn;b.publisher=Array.isArray(doc.publisher)?doc.publisher.join(", "):"";
+   b.publicationDate=Array.isArray(doc.publish_date)?doc.publish_date[0]||"":(doc.publish_date||"");return b;
+  }catch(e){}
+ }
+ return null;
+}
+
+async function lookupWikidata(isbn,variants){
+ // Wikidata SPARQL is a public, key-free source; it may be unavailable due to CORS/rate limits.
+ for(var i=0;i<variants.length;i++){
+  try{
+   var q='SELECT ?item ?itemLabel ?authorLabel ?pubDate WHERE { ?item wdt:P212 "'+variants[i]+'". OPTIONAL {?item wdt:P50 ?author.} OPTIONAL {?item wdt:P577 ?pubDate.} SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } } LIMIT 10';
+   var r=await fetch("https://query.wikidata.org/sparql?query="+encodeURIComponent(q)+"&format=json",{headers:{Accept:"application/sparql-results+json"}});
+   if(!r.ok)continue;var d=await r.json(),rows=d.results&&d.results.bindings||[];if(!rows.length)continue;
+   var row=rows[0],date=row.pubDate&&row.pubDate.value||"",ym=date.match(/\d{4}/);
+   return {isbn:isbn,title:row.itemLabel&&row.itemLabel.value||"",authors:rows.map(function(x){return x.authorLabel&&x.authorLabel.value||"";}).filter(Boolean),publisher:"",publicationDate:date,year:ym?ym[0]:"",cover:"",status:"want"};
+  }catch(e){}
+ }
+ return null;
+}
+
+async function lookupCrossref(isbn,variants){
+ // Crossref is a free public API. Accept only a result that explicitly lists the ISBN.
+ for(var i=0;i<variants.length;i++){
+  try{
+   var r=await fetch("https://api.crossref.org/works?query.bibliographic="+encodeURIComponent(variants[i])+"&rows=10");
+   if(!r.ok)continue;var d=await r.json(),items=d.message&&d.message.items||[];
+   var item=items.find(function(x){return exactIsbnMatch(x.ISBN,variants);});if(!item)continue;
+   var date="";if(item.published&&item.published["date-parts"]&&item.published["date-parts"][0])date=item.published["date-parts"][0].join("-");
+   var ym=date.match(/\d{4}/);
+   return {isbn:isbn,title:Array.isArray(item.title)?item.title[0]||"":"",authors:(item.author||[]).map(function(a){return [a.given,a.family].filter(Boolean).join(" ");}).filter(Boolean),publisher:item.publisher||"",publicationDate:date,year:ym?ym[0]:"",cover:"",status:"want"};
+  }catch(e){}
+ }
+ return null;
+}
+
+async function lookupLibraryOfCongressISBN(isbn, variants){
+ variants=variants||[isbn];
  try {
    var url = "https://www.loc.gov/books/?fo=json&c=5&q=" + encodeURIComponent('"' + isbn + '"');
    var res = await fetch(url, {headers:{"Accept":"application/json"}});
@@ -445,7 +467,7 @@ async function lookupLibraryOfCongressISBN(isbn){
    var data = await res.json();
    var results = data && data.results ? data.results : [];
    if (!results.length) return null;
-   var r = results.find(function(x){ return JSON.stringify(x).indexOf(isbn) !== -1; });
+   var r = results.find(function(x){ return variants.some(function(v){ return JSON.stringify(x).indexOf(v) !== -1; }); });
    if (!r) return null; // Avoid accepting an unrelated LOC search result as an ISBN match.
    var title = r.title || r.item && r.item.title;
    if (!title) return null;
@@ -467,11 +489,11 @@ function isbn10From13(isbn){
  return body + (check === 10 ? "X" : String(check));
 }
 
-async function lookupInternetArchive(isbn){
+async function lookupInternetArchive(isbn, variants){
+ variants=variants||[isbn];
  try {
-   var variants = [isbn];
    var isbn10 = isbn10From13(isbn);
-   if (isbn10) variants.push(isbn10);
+   if (isbn10 && variants.indexOf(isbn10)===-1) variants.push(isbn10);
    var query = variants.map(function(v){ return 'isbn:"' + v + '"'; }).join(" OR ");
    var params = new URLSearchParams();
    params.set("q", query);
@@ -492,7 +514,7 @@ async function lookupInternetArchive(isbn){
    var doc = docs.find(function(d){
      var vals = Array.isArray(d.isbn) ? d.isbn : (d.isbn ? [d.isbn] : []);
      return vals.some(function(v){return normalizedVariants.indexOf(cleanIsbn(v)) !== -1;});
-   }) || docs[0];
+   });
    if (!doc || !doc.identifier || !doc.title) return null;
 
    // Fetch full item metadata for a richer record and validate identifiers if present.
@@ -513,9 +535,8 @@ async function lookupInternetArchive(isbn){
      else if (v) metaIsbns.push(v);
    });
    var exactMatch = metaIsbns.some(function(v){return normalizedVariants.indexOf(cleanIsbn(v)) !== -1;});
-   // Advanced Search itself searched the ISBN field; if metadata omits the field,
-   // accept the best result from that exact field query.
-   if (metaIsbns.length && !exactMatch) return null;
+   // Never accept a record unless the returned metadata confirms the ISBN.
+   if (!exactMatch) return null;
 
    var rawAuthor = meta.creator || doc.creator || [];
    var authors = Array.isArray(rawAuthor) ? rawAuthor : [rawAuthor];
@@ -554,7 +575,8 @@ function bookFromISBNDoc(doc, fallbackIsbn){
 }
 
 // Google Books volume lookup by ISBN — public and does not require an API key.
-async function lookupGoogle(isbn){
+async function lookupGoogle(isbn, variants){
+ variants=variants||[isbn];
  try {
    var res = await fetch("https://www.googleapis.com/books/v1/volumes?q=isbn:" +
      encodeURIComponent(isbn) + "&maxResults=5");
@@ -564,9 +586,10 @@ async function lookupGoogle(isbn){
    var item = data.items.find(function(entry) {
      var ids = (entry.volumeInfo && entry.volumeInfo.industryIdentifiers) || [];
      return ids.some(function(id) {
-       return String(id.identifier || "").replace(/[^0-9Xx]/g, "").toUpperCase() === isbn;
+       return variants.indexOf(String(id.identifier || "").replace(/[^0-9Xx]/g, "").toUpperCase()) !== -1;
      });
-   }) || data.items[0];
+   });
+   if (!item) return null;
    var v = item.volumeInfo || {};
    var cover = "";
    if (v.imageLinks) {
@@ -650,7 +673,8 @@ function addBook(b){
  showLoading(isbn);
  var book = await lookupBook(isbn);
  if (!book){
-   confirmEl.innerHTML = '<div class="confirm-card"><div><b>No exact record found for ISBN '+esc(isbn)+'.</b><div class="cyear" style="margin-top:6px">Free sources checked: Open Library, Google Books, Internet Archive and Library of Congress. You can search alternative editions or enter the details yourself.</div></div></div>'+
+   var report = (lookupBook.lastReport || []).map(function(x){ return esc(x.name)+": "+esc(x.status); }).join(" · ");
+   confirmEl.innerHTML = '<div class="confirm-card"><div><b>No exact record found for ISBN '+esc(isbn)+'.</b><div class="cyear" style="margin-top:6px">My Shelf checked all configured free sources. A source marked “unavailable” may have failed because of network, CORS, or rate limits; that is not proof the book is absent.</div><div class="source-note">Lookup report: '+report+'</div></div></div>'+
    '<div class="confirm-actions"><button class="btn btn-ghost" id="cIsbnSearch">ISBNsearch.org</button><button class="btn btn-ghost" id="cWorldCat">WorldCat</button><button class="btn btn-ghost" id="cGoogleSearch">Google Books</button><button class="btn btn-ghost" id="cTitle">Search by title</button><button class="btn btn-primary" id="cManual">Enter details</button></div><div id="manualMount"></div>';
    $("cIsbnSearch").onclick = function(){ window.open("https://isbnsearch.org/isbn/" + encodeURIComponent(isbn), "_blank", "noopener,noreferrer"); };
    $("cWorldCat").onclick = function(){ window.open("https://search.worldcat.org/search?q=" + encodeURIComponent(isbn), "_blank", "noopener,noreferrer"); };
