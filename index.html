@@ -675,11 +675,7 @@ function addBook(b){
  if (!book){
    var report = (lookupBook.lastReport || []).map(function(x){ return esc(x.name)+": "+esc(x.status); }).join(" · ");
    confirmEl.innerHTML = '<div class="confirm-card"><div><b>No exact record found for ISBN '+esc(isbn)+'.</b><div class="cyear" style="margin-top:6px">My Shelf checked all configured free sources. A source marked “unavailable” may have failed because of network, CORS, or rate limits; that is not proof the book is absent.</div><div class="source-note">Lookup report: '+report+'</div></div></div>'+
-   '<div class="confirm-actions"><button class="btn btn-ghost" id="cIsbnSearch">ISBNsearch.org</button><button class="btn btn-ghost" id="cWorldCat">WorldCat</button><button class="btn btn-ghost" id="cGoogleSearch">Google Books</button><button class="btn btn-ghost" id="cTitle">Search by title</button><button class="btn btn-primary" id="cManual">Enter details</button></div><div id="manualMount"></div>';
-   $("cIsbnSearch").onclick = function(){ window.open("https://isbnsearch.org/isbn/" + encodeURIComponent(isbn), "_blank", "noopener,noreferrer"); };
-   $("cWorldCat").onclick = function(){ window.open("https://search.worldcat.org/search?q=" + encodeURIComponent(isbn), "_blank", "noopener,noreferrer"); };
-   $("cGoogleSearch").onclick = function(){ window.open("https://books.google.com/books?vid=ISBN" + encodeURIComponent(isbn), "_blank", "noopener,noreferrer"); };
-   $("cTitle").onclick = function(){ var inp=$("isbnInput"); inp.value=""; inp.focus(); inp.scrollIntoView({behavior:"smooth",block:"center"}); };
+   '<div class="confirm-actions"><button class="btn btn-primary" id="cManual">Enter Details</button></div><div id="manualMount"></div>';
    $("cManual").onclick = function(){ editBook({isbn:isbn,title:"",authors:[],publisher:"",publicationDate:"",year:"",cover:"",status:"want",addedAt:Date.now()}, true); };
    confirmEl.style.display = "block";
    return;
