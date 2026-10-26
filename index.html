@@ -62,7 +62,6 @@
  .btn-ghost{background:var(--chip); color:var(--ink)}
  .btn-sm{width:auto; padding:9px 14px; font-size:14px; border-radius:11px}
  .scan-icon{width:22px;height:22px}
-
  .toolbar{display:flex; gap:10px; margin-top:12px}
  .toolbar .btn{flex:1}
 
@@ -112,7 +111,6 @@
  font-size:13px; padding:6px 12px; border-radius:20px; cursor:pointer; white-space:nowrap;
  }
  .filter.active{background:var(--accent); color:var(--accent-ink); border-color:transparent}
-
  .book{
  display:flex; gap:12px; align-items:center; padding:10px; margin-bottom:10px;
  background:var(--card); border:1px solid var(--line); border-radius:14px;
@@ -131,7 +129,6 @@
  background:transparent; color:var(--muted); font-size:18px; line-height:1;
  }
  .remove:active{background:var(--chip)}
-
  .empty{text-align:center; color:var(--muted); padding:34px 10px}
  .empty svg{width:54px;height:54px;opacity:.5;margin-bottom:8px}
 
@@ -150,7 +147,6 @@
  opacity:0; pointer-events:none; transition:all .25s ease; max-width:90%; text-align:center; z-index:50;
  }
  #toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
-
  footer{text-align:center; color:var(--muted); font-size:12px; margin-top:30px}
  footer a{color:var(--accent)}
  .spinner{width:18px;height:18px;border:2.5px solid var(--accent-soft);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;display:inline-block;vertical-align:middle}
@@ -330,8 +326,7 @@
  [].forEach.call(this.children, function(c){ c.classList.toggle("active", c===f); });
  renderShelf();
  });
-
- // ---------- Open Library lookup ----------
+  // ---------- Open Library lookup ----------
  function jsonp(url, cb){
  return new Promise(function(resolve, reject){
  var s = document.createElement("script");
@@ -468,7 +463,7 @@ async function lookupLibraryOfCongressISBN(isbn, variants){
    var results = data && data.results ? data.results : [];
    if (!results.length) return null;
    var r = results.find(function(x){ return variants.some(function(v){ return JSON.stringify(x).indexOf(v) !== -1; }); });
-   if (!r) return null; // Avoid accepting an unrelated LOC search result as an ISBN match.
+   if (!r) return null;
    var title = r.title || r.item && r.item.title;
    if (!title) return null;
    var authors = r.contributors || r.creator || [];
@@ -481,7 +476,6 @@ async function lookupLibraryOfCongressISBN(isbn, variants){
 }
 
 function isbn10From13(isbn){
- // Convert ISBN-13 beginning with 978 to ISBN-10; 979 ISBNs have no ISBN-10 form.
  if (!/^978\d{10}$/.test(isbn)) return "";
  var body = isbn.slice(3,12), sum = 0;
  for (var i=0; i<9; i++) sum += (10-i) * Number(body[i]);
@@ -507,17 +501,12 @@ async function lookupInternetArchive(isbn, variants){
    var data = await res.json();
    var docs = data && data.response && data.response.docs ? data.response.docs : [];
    if (!docs.length) return null;
-
-   // Prefer records that explicitly list the scanned ISBN; the search query is
-   // also constrained to the ISBN field to avoid unrelated title matches.
    var normalizedVariants = variants.map(function(v){return cleanIsbn(v);});
    var doc = docs.find(function(d){
      var vals = Array.isArray(d.isbn) ? d.isbn : (d.isbn ? [d.isbn] : []);
      return vals.some(function(v){return normalizedVariants.indexOf(cleanIsbn(v)) !== -1;});
    });
    if (!doc || !doc.identifier || !doc.title) return null;
-
-   // Fetch full item metadata for a richer record and validate identifiers if present.
    var meta = {};
    try {
      var mr = await fetch("https://archive.org/metadata/" + encodeURIComponent(doc.identifier), {
@@ -528,16 +517,13 @@ async function lookupInternetArchive(isbn, variants){
        meta = (md && md.metadata) || {};
      }
    } catch(e) {}
-
    var metaIsbns = [];
    [meta.isbn, meta.isbn13, meta.isbn_13, meta.isbn10, meta.isbn_10, doc.isbn].forEach(function(v){
      if (Array.isArray(v)) metaIsbns = metaIsbns.concat(v);
      else if (v) metaIsbns.push(v);
    });
    var exactMatch = metaIsbns.some(function(v){return normalizedVariants.indexOf(cleanIsbn(v)) !== -1;});
-   // Never accept a record unless the returned metadata confirms the ISBN.
    if (!exactMatch) return null;
-
    var rawAuthor = meta.creator || doc.creator || [];
    var authors = Array.isArray(rawAuthor) ? rawAuthor : [rawAuthor];
    authors = authors.map(function(a){return String(a).trim();}).filter(Boolean);
@@ -549,7 +535,6 @@ async function lookupInternetArchive(isbn, variants){
      authors:authors, publisher:meta.publisher || doc.publisher || "", publicationDate:String(rawDate || ""),
      cover:"https://archive.org/services/img/" + encodeURIComponent(doc.identifier),
      year:yearMatch ? yearMatch[0] : "",
-     publisher:meta.publisher || doc.publisher || "",
      status:"want",
      addedAt:Date.now()
    };
@@ -613,9 +598,6 @@ async function lookupGoogle(isbn, variants){
 }
 
  // ---------- offline cover cache ----------
- // Covers can't be read as bytes (no CORS on the cover server), but they can be
- // stored for display. We put the image into a Cache the service worker reads from,
- // so the cover keeps showing even with no connection.
  var COVER_CACHE = "myshelf-covers-v1";
  function saveCover(u){
  if (!u || !("caches" in window)) return;
@@ -645,7 +627,7 @@ async function lookupGoogle(isbn, variants){
  '<div class="confirm-actions">'+
  '<button class="btn btn-ghost" id="cEdit">Edit details</button>'+
  '<button class="btn btn-primary" id="cAdd">Add to shelf</button>'+
- '<button class="btn btn-ghost" id="cAgain">Scan another</button>'+ 
+ '<button class="btn btn-ghost" id="cAgain">Scan another</button>'+
  '</div>';
  confirmEl.style.display = "block";
  $("cAdd").onclick = function(){ addBook(b); confirmEl.style.display="none"; };
@@ -681,8 +663,6 @@ function addBook(b){
    return;
  }
  if (autoAddOnScan) {
-   // A successful barcode scan should add the matched book immediately.
-   // Keep a review/edit card visible so the user can correct metadata if needed.
    addBook(book);
    showConfirm(book);
    var addButton = $("cAdd");
@@ -695,9 +675,7 @@ function addBook(b){
  showConfirm(book);
  }
 
- // ---------- title search (fallback when a barcode/ISBN isn't catalogued) ----------
- // Open Library's search endpoint allows direct browser access and matches across
- // every edition, so typing a title finds books whose exact ISBN isn't catalogued.
+ // ---------- title search ----------
  function bookFromDoc(doc){
  var cover = doc.cover_i
  ? ("https://covers.openlibrary.org/b/id/" + doc.cover_i + "-M.jpg")
@@ -733,12 +711,12 @@ async function searchByTitle(q){
    var r1=await fetch("https://openlibrary.org/search.json?q="+encodeURIComponent(q)+"&limit=8&fields=key,title,author_name,first_publish_year,cover_i,isbn,publisher,first_sentence");
    if(r1.ok){var d1=await r1.json();(d1.docs||[]).forEach(function(d){var b=bookFromDoc(d);b.publisher=Array.isArray(d.publisher)?d.publisher[0]||"":"";b.publicationDate=b.first_publish_year?String(b.first_publish_year):"";addResult(b,"Open Library");});}
  } catch(e){}
- // Google Books (no key for ordinary low-volume queries; service quota applies)
+ // Google Books
  try {
    var r2=await fetch("https://www.googleapis.com/books/v1/volumes?q="+encodeURIComponent(q)+"&maxResults=8");
    if(r2.ok){var d2=await r2.json();(d2.items||[]).forEach(function(it){var v=it.volumeInfo||{}, ids=v.industryIdentifiers||[], isbn=(ids.find(function(x){return x.type==="ISBN_13";})||ids.find(function(x){return x.type==="ISBN_10";})||{}).identifier||"";var il=v.imageLinks||{};var pd=v.publishedDate||"";var ym=pd.match(/\d{4}/);addResult({isbn:isbn||("GB:"+it.id),title:v.title||"Untitled",authors:v.authors||[],publisher:v.publisher||"",publicationDate:pd,year:ym?ym[0]:"",cover:(il.thumbnail||il.smallThumbnail||"").replace(/^http:/,"https:"),status:"want",addedAt:Date.now()},"Google Books");});}
  } catch(e){}
- // Internet Archive metadata catalog
+ // Internet Archive
  try {
    var iaUrl="https://archive.org/advancedsearch.php?"+new URLSearchParams({q:"title:("+q+") OR creator:("+q+")",output:"json",rows:"8"})+"&fl[]=identifier&fl[]=title&fl[]=creator&fl[]=date&fl[]=year&fl[]=isbn&fl[]=publisher";
    var r3=await fetch(iaUrl);if(r3.ok){var d3=await r3.json();((d3.response||{}).docs||[]).forEach(function(d){var au=d.creator||[];if(!Array.isArray(au))au=[au];var dt=String(d.date||d.year||"");var ym=dt.match(/\d{4}/);addResult({isbn:(Array.isArray(d.isbn)?d.isbn[0]:d.isbn)||("IA:"+d.identifier),title:d.title||"Untitled",authors:au,publisher:Array.isArray(d.publisher)?d.publisher.join(", "):d.publisher||"",publicationDate:dt,year:ym?ym[0]:"",cover:"https://archive.org/services/img/"+encodeURIComponent(d.identifier),status:"want",addedAt:Date.now()},"Internet Archive");});}
@@ -747,12 +725,9 @@ async function searchByTitle(q){
  try {
    var r4=await fetch("https://www.loc.gov/books/?fo=json&c=8&q="+encodeURIComponent(q));if(r4.ok){var d4=await r4.json();(d4.results||[]).forEach(function(d){var au=d.contributors||d.creator||[];if(!Array.isArray(au))au=[au];var dt=String(d.date||d.created_published||"");var ym=dt.match(/\d{4}/);addResult({isbn:"LOC:"+(d.id||d.title),title:d.title||"Untitled",authors:au.map(function(a){return typeof a==="string"?a:(a.name||a.value||"");}).filter(Boolean),publisher:d.publisher||"",publicationDate:dt,year:ym?ym[0]:"",cover:d.image_url||"",status:"want",addedAt:Date.now()},"Library of Congress");});}
  } catch(e){}
- if (!all.length){
-   confirmEl.innerHTML='<div class="confirm-card"><div>No matches for <b>'+esc(q)+'</b> across the available free catalogs.<div class="cyear" style="margin-top:6px">Try another spelling, add the author, or enter the book details manually.</div></div></div><div class="confirm-actions"><button class="btn btn-primary" id="manualFromTitle">Enter details manually</button><button class="btn btn-ghost" id="isbnSearchTitle">ISBNsearch.org</button><button class="btn btn-ghost" id="worldcatTitle">WorldCat</button><button class="btn btn-ghost" id="googleTitle">Google Books</button></div><div id="manualMount"></div>';
+  if (!all.length){
+   confirmEl.innerHTML='<div class="confirm-card"><div>No matches for <b>'+esc(q)+'</b> across the available free catalogs.<div class="cyear" style="margin-top:6px">Try another spelling, add the author, or enter the book details manually.</div></div></div><div class="confirm-actions"><button class="btn btn-primary" id="manualFromTitle">Enter details manually</button></div><div id="manualMount"></div>';
    $("manualFromTitle").onclick=function(){editBook({isbn:"",title:q,authors:[],publisher:"",publicationDate:"",year:"",cover:"",status:"want",addedAt:Date.now()},true);};
-   $("isbnSearchTitle").onclick=function(){window.open("https://isbnsearch.org/search?s="+encodeURIComponent(q),"_blank","noopener,noreferrer");};
-   $("worldcatTitle").onclick=function(){window.open("https://search.worldcat.org/search?q="+encodeURIComponent(q),"_blank","noopener,noreferrer");};
-   $("googleTitle").onclick=function(){window.open("https://books.google.com/books?q="+encodeURIComponent(q),"_blank","noopener,noreferrer");};
    confirmEl.style.display="block";return;
  }
  var rows=all.map(function(b,i){return '<div class="book" data-ri="'+i+'" style="cursor:pointer">'+coverHTML(b)+'<div class="info"><p class="bt">'+esc(b.title)+'</p><div class="ba">'+esc(b.authors.length?b.authors.join(", "):"Unknown author")+(b.publicationDate?" · "+esc(b.publicationDate):b.year?" · "+esc(b.year):"")+'</div><div class="cyear">'+esc(b.publisher||b.source||"")+'</div></div><span class="status want" style="pointer-events:none">Select</span></div>';}).join("");
@@ -782,7 +757,7 @@ function editBook(book, mountInConfirm){
  };
 }
 
- // Decide whether the typed text is an ISBN or a title, and route accordingly.
+ // Decide whether the typed text is an ISBN or a title.
  function handleQuery(raw){
  var s = (raw || "").trim();
  if (!s) return;
@@ -822,12 +797,11 @@ function editBook(book, mountInConfirm){
  if (navigator.vibrate) navigator.vibrate(60);
  stopScan().then(function(){ handleIsbn(text, true); });
  }
- function onError(){ /* per-frame decode misses — ignore */ }
+ function onError(){}
 
  try {
  await scanner.start({ facingMode: "environment" }, config, onSuccess, onError);
  } catch(e){
- // retry without the environment constraint (some devices reject it)
  try { await scanner.start(undefined, config, onSuccess, onError); }
  catch(e2){
  scannerEl.style.display = "none";
@@ -836,15 +810,12 @@ function editBook(book, mountInConfirm){
  }
  }
 
-
-
-
 function stopScan(){
  scannerEl.style.display = "none";
  if (!scanner) return Promise.resolve();
  var s = scanner; scanner = null;
  return s.stop().then(function(){ s.clear(); }).catch(function(){});
- }
+}
 
  $("scanBtn").addEventListener("click", startScan);
  $("cancelScan").addEventListener("click", function(){ stopScan(); });
@@ -887,11 +858,10 @@ function stopScan(){
  r.readAsText(file); e.target.value = "";
  });
 
- // ---------- install experience (works on both platforms) ----------
+ // ---------- install experience ----------
  var standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
  var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
 
- // iOS can't trigger an install prompt from a page, so show a how-to hint.
  if (isIOS && !standalone && !localStorage.getItem("hint.dismissed")){
  $("hint").style.display = "block";
  }
@@ -900,7 +870,6 @@ function stopScan(){
  try { localStorage.setItem("hint.dismissed","1"); } catch(e){}
  });
 
- // Android / Chromium: the browser offers a real install prompt — surface it as a button.
  var deferredPrompt = null;
  window.addEventListener("beforeinstallprompt", function(e){
  e.preventDefault();
